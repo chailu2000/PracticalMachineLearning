@@ -1,0 +1,84 @@
+---
+title: "Simple data analysis on Weight Lifting Exercise Dataset"
+author: "Lu Chai"
+date: "02/21/2015"
+output: html_document
+---
+
+Synopsis
+---------------------------------------------------
+In this report we first read in the provided training and testing dataset. Next, we clean up the raw data: 1) we remove columns that only contains #DIV/0! and blank and rows with #DIV/0! as it is not valid for the numeric data type. 2) We convert factors to numerics. 3) We drop zero columns from a near zero analyses. Then, we create a model using random forest. Lastly, we apply the model to our testing set to predict our outcome.
+
+# Data Processing
+
+```{r}
+library(caret)
+# function to clean up our raw data
+preprocessData <- function(df) {
+  # remove columns with #DIV/0!
+  df <- df[,-which(names(df) %in% c("new_window","amplitude_yaw_belt", "amplitude_yaw_forearm","amplitude_yaw_dumbbell", "kurtosis_yaw_forearm", "kurtosis_yaw_belt", "skewness_yaw_belt", "kurtosis_yaw_dumbbell", "skewness_yaw_dumbbell", "skewness_yaw_forearm"))]
+  
+  dropInd <- which(apply(df, 1, function(x) any(x=="#DIV/0!")))
+  df <- df[-dropInd,]
+  
+  library(caret)
+  
+  # convert factors to numeric 
+  facs <- sapply(df[,-ncol(df)], is.factor)
+  df[ , facs] <- as.numeric(as.character(df[ , facs]))
+  
+  # set NA to 0
+  df[is.na(df)] <- 0
+  
+  nsv <- nearZeroVar(df,saveMetrics=TRUE)
+  
+  # remove zero columns
+  df <- df[,-which(names(df) %in% c(rownames(nsv[nsv$zeroVar,])))]
+  return(df)
+}
+
+# set seed
+set.seed(2172015)
+
+# load training and testing dataset
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+
+# clean up training data using the function we created 
+# also apply same processing to the testing dataset
+training<-preprocessData(training)
+testing[is.na(testing)] <- 0
+testing <- testing[, which(names(testing) %in% names(training))]
+
+```
+
+# Model creation
+
+We use 2-fold cross-validation
+```{r}
+# create training control object for 2-fold cross-validation
+fitControl <- trainControl(method="cv",
+                           number=2,
+                           repeats=1,
+                           verboseIter=TRUE)
+```
+
+Random forest model
+
+```{r}
+# Random Forest
+# with principle component analysis
+rf_model <- train(classe~.,data=training,method="rf",
+                 trControl=fitControl,
+                 preProcess=c("scale", "pca")) 
+rf_model
+
+```
+With this model, we achieved accuracy of 0.9786960 and standard deviation of 0.002184765. (See output above.)
+
+# Result
+Apply our random forest model to the testing dataset to obtain predictions
+```{r}
+testRf<- predict(rf_model, testing)
+testRf
+```
